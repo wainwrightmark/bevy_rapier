@@ -1678,6 +1678,63 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn fixed_timestep_colliders() {
+        let mut app = App::new();
+
+        app.add_plugins(TransformPlugin);
+        app.add_plugins(TimePlugin);
+        app.insert_resource(FixedTime::new_from_secs(2.0));
+        app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule());
+
+        app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::from_secs(1)));
+
+        app.add_systems(PreUpdate, check_collisions); // note that this does not panic if this system is in `Update`
+
+        app
+            .world
+            .spawn((
+                TransformBundle::from(Transform::default()),
+                RigidBody::Fixed,
+                Collider::ball(1.0),
+                ActiveEvents::CONTACT_FORCE_EVENTS,
+            ));
+
+        let entity2 = app
+            .world
+            .spawn((
+                TransformBundle::from(Transform::default()),
+                RigidBody::Fixed,
+                Collider::ball(1.0),
+            ))
+            .id();
+
+        app.update();
+        app.update();
+        app.update();
+        println!("Despawning");
+        app.world.despawn(entity2);
+        app.update();
+        app.update();
+
+        fn check_collisions(
+            rapier_context: Res<RapierContext>,
+            colliders: Query<Entity, With<ActiveEvents>>,
+        ) {
+            for sensor_entity in colliders.into_iter() {
+                let contacts = rapier_context.contacts_with(sensor_entity);
+                for contact in contacts {
+                    let collider1: Entity = contact.collider1();
+                    let collider2 = contact.collider2();
+
+                    println!("Contact found {collider1:?} {collider2:?}");
+                    assert_ne!(collider1, collider2);
+                }
+            }
+        }
+    }
+
     #[test]
     fn transform_propagation() {
         let mut app = App::new();
